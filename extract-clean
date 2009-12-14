@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+
+# XXX:
+# - Possible to execute in terminal from Nautilus?
+# - Possible to raise errors into GUI box?
+# - Restrict depth of recurse
+
+# 
+#  A multi purpose script for dealing with nested directories and multiple
+#  .rar-files. Extracting, converting and cleaning up recursively.
+#
+
+
+import commands # UNIX only. Wrapper for os.popen(). Different signal handling than os.system()
+import getopt
+import os # Both UNIX and Windows platform
+import re
+import signal
+import sys
+import time
+
+dryrun = False
+
+def main(argv):
+    try:
+        opts, args = getopt.getopt(argv, 'xcod')
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    #time.sleep(10)
+
+    global dryrun
+    if len(opts) > 0 and args and os.access(args[0], os.R_OK):
+        # FIXME: has to be a better way than two for loops?
+        for opt in opts:
+            if opt[0] == '-d':
+                dryrun = True
+
+        for opt in opts:
+            if opt[0] == '-x':
+                extract(args[0])
+            elif opt[0] == '-c':
+                clean(args[0])
+            elif opt[0] == '-o':
+                ogm_to_mkv_convert(args[0])
+    else:
+        usage()
+        sys.exit(2)
+
+
+def signal_handler(signal, frame):
+    print "\nExiting..."
+    sys.exit(0)
+
+
+def extract(path):
+    global dryrun
+    for (path, dirs, files) in os.walk(path):
+
+        for file in os.listdir(path):
+            match = re.search('([\w,\.,\-]*\.rar)', file)
+
+            if match:
+                if dryrun:
+                    print path
+                else:
+                    # XXX: Either find a way to propegate messages to the front, or supress/assume yes on all queries.
+                    status, output = commands.getstatusoutput('unrar e -y "%s"/"%s" "%s"' % (path, match.group(0), path))
+                    print status
+                    print output
+
+
+def ogm_to_mkv_convert(path):
+    for (path, dirs, files) in os.walk(path):
+
+        for file in os.listdir(path):
+            match = re.search('([\w,\.,\-]*)\.ogm', file)
+
+            if match:
+                basename = match.group(1)
+                #print basename
+                os.system('mkvmerge -o "%s"/"%s".mkv "%s"/"%s".ogm --title %s' % (path, basename, path, basename, basename))
+
+
+def clean(path):
+    for (path, dirs, files) in os.walk(path):
+
+        for file in os.listdir(path):
+            match = re.search('[\w,\.,\-]*\.[r\w+,sfv]', file)
+
+            if match:
+                print match.group(0)
+                #os.system('mkvmerge -o "%s"/"%s".mkv "%s"/"%s".ogm --title %s' % (path, basename, path, basename, basename))
+    # Remove ogm if mkv exists
+    # Remove *.r* and [Ss]ample dir if mkv is extracted
+
+
+def usage():
+    print >> sys.stderr, "\
+Usage: %s [OPTION]... DIRECTORY \n\
+\n\
+Report bugs to jabr@pludre.net" % sys.argv[0]
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
