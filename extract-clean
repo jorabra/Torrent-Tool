@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 
-# XXX:
-# - Possible to execute in terminal from Nautilus?
-# - Possible to raise errors into GUI box?
-# - Restrict depth of recurse
-
 # 
-#  A multi purpose script for dealing with nested directories and multiple
-#  .rar-files. Extracting, converting and cleaning up recursively.
+# A multi purpose script for dealing with nested directories and multiple
+# .rar-files. Extracting, converting and cleaning up recursively.
 #
+# Author: Jørgen Abrahamsen <jabr@pludre.net>
 
 
 import commands # UNIX only. Wrapper for os.popen(). Different signal handling than os.system()
