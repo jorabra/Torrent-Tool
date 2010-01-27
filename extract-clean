@@ -1,10 +1,12 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # 
 # A multi purpose script for dealing with nested directories and multiple
 # .rar-files. Extracting, converting and cleaning up recursively.
 #
 # Author: Jørgen Abrahamsen <jabr@pludre.net>
+#
 
 
 import commands # UNIX only. Wrapper for os.popen(). Different signal handling than os.system()
@@ -15,12 +17,12 @@ import signal
 import sys
 import time
 
-dryrun = False
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(argv, 'xcod')
-    except getopt.GetoptError:
+        opts, args = getopt.getopt(argv, 'xcods')
+    except getopt.GetoptError, err:
+        print str(err)
         usage()
         sys.exit(2)
 
@@ -28,45 +30,93 @@ def main(argv):
 
     #time.sleep(10)
 
-    global dryrun
-    if len(opts) > 0 and args and os.access(args[0], os.R_OK):
-        # FIXME: has to be a better way than two for loops?
-        for opt in opts:
-            if opt[0] == '-d':
-                dryrun = True
-
-        for opt in opts:
-            if opt[0] == '-x':
-                extract(args[0])
-            elif opt[0] == '-c':
-                clean(args[0])
-            elif opt[0] == '-o':
-                ogm_to_mkv_convert(args[0])
-    else:
+    # Check path
+    if not args:
+        print "Path not supplied."
         usage()
-        sys.exit(2)
+        sys.exit(1)
+
+    # Variables to be set, or not
+    # Put them outside as global variables instead?
+    vars = {
+        'path': args[0],
+        'debug': False,
+        'do_sfv_verify': False,
+        'do_extract': False,
+        'do_clean': False,
+        'do_ogm_conversion': False,
+    }
+
+    # Registrate what options are passed to the program
+    for opt, arg in opts:
+        if opt == '-d':
+            vars['debug'] = True
+        elif opt == '-x':
+            vars['do_extract'] = True
+        elif opt == '-c':
+            vars['do_clean'] = True
+        elif opt == '-o':
+            vars['do_ogm_conversion'] = True
+        elif opt == '-s':
+            vars['do_sfv_verify'] = True
+
+
+    traverse(vars)
+
+    # Execute operations
+    #if vars['do_sfv_verify']:
+    #    sfv_verify(vars)
+    #if vars['do_extract']:
+    #    extract(vars['path'], vars['debug'])
+    #if vars['do_clean']: # if extracted file exists -- keep nfo
+    #    clean(path)
+    #if vars['do_ogm_conversion']:
+    #    ogm_to_mkv_convert(path)
+
+
+    sys.exit(0)
 
 
 def signal_handler(signal, frame):
+    os.abort()
     print "\nExiting..."
     sys.exit(0)
 
 
-def extract(path):
-    global dryrun
+def sfv_verify(vars):
+    if vars['debug']:
+        print vars
+
+def traverse(vars):
+    path = vars['path']
+    debug = vars['debug']
+
     for (path, dirs, files) in os.walk(path):
 
         for file in os.listdir(path):
             match = re.search('([\w,\.,\-]*\.rar)', file)
 
             if match:
-                if dryrun:
+                if debug:
                     print path
                 else:
-                    # XXX: Either find a way to propegate messages to the front, or supress/assume yes on all queries.
-                    status, output = commands.getstatusoutput('unrar e -y "%s"/"%s" "%s"' % (path, match.group(0), path))
-                    print status
-                    print output
+                    # Do specified actions
+
+                    status = None
+                    output = None
+                    if vars['do_sfv_verify']:
+                        status, output = commands.getstatusoutput('cfv -p "%s"' % path)
+                        print path
+                    if not status == 0:
+                        print "Verification failed:\n%s" % output
+                    #else:
+                    #    print "Verified: %s" % path
+
+                    if status == 0 and vars['do_extract'] or not vars['do_sfv_verify'] and vars['do_extract']:
+                        print path
+                        status, output = commands.getstatusoutput('unrar e -y "%s"/"%s" "%s"' % (path, match.group(0), path))
+                    if not status == 0:
+                        print "Extraction failed:\n%s" % output
 
 
 def ogm_to_mkv_convert(path):
@@ -90,8 +140,8 @@ def clean(path):
             if match:
                 print match.group(0)
                 #os.system('mkvmerge -o "%s"/"%s".mkv "%s"/"%s".ogm --title %s' % (path, basename, path, basename, basename))
-    # Remove ogm if mkv exists
-    # Remove *.r* and [Ss]ample dir if mkv is extracted
+                # Remove ogm if mkv exists
+                # Remove *.r* and [Ss]ample dir if mkv is extracted
 
 
 def usage():
