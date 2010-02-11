@@ -17,16 +17,6 @@ import signal
 import sys
 from time import time
 
-# TODO
-#
-# - Verify support recursion
-# - Rename input operators
-# - Refactor function calling section
-# - Sane verbosity level -- perhaps debug flag, again?
-
-# - Sort order!
-# - Verify don't exit if failing
-
 
 def main(argv):
     try:
