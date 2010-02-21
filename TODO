@@ -1,17 +1,13 @@
 
-== TODO's
+== Torrent Tool TODO's
 
 - Verify support recursion
+- Use optparse for command-line parsing 
 - Rename input operators
 - Refactor function calling section
 - Sane verbosity level -- perhaps debug flag, again?
-
 - Sort order of torrents to extract!
 - Verify don't exit if failing
-
-- Possible to execute in terminal from Nautilus?
 - Possible to raise errors into GUI box?
 - Restrict depth of recurse
-
 - List application dependencies
-- Filter out right files.
