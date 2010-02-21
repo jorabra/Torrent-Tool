@@ -1,0 +1,18 @@
+#!/bin/bash
+
+print () 
+{ 
+	echo -e "(1) Verify\n(2) Extract\n(3) Clean\n(4) Verify, extract and clean\n(x) Abort\nSelect action: "
+	read response
+	[ "$response" = 1 ] && action="-s"
+	[ "$response" = 2 ] && action="-x"
+	[ "$response" = 3 ] && action="-c"
+	[ "$response" = 4 ] && action="-s -x -c"
+	[ "$response" = x ] && exit 1
+
+	/usr/local/bin/torrent-tool $action ${1}
+}
+
+export -f print
+
+gnome-terminal --execute bash -c "print ${1}; bash"
