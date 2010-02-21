@@ -90,7 +90,7 @@ def verify(path):
             sys.exit(1)
 
     if count > 1:
-        print "Verification completed in %s seconds\n" % round(time() - clean_start_time)
+        print "Verification completed in %s seconds\n" % round(time() - verify_start_time)
 
 
 def extract(path):
