@@ -1,193 +1,148 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# 
-# A multi purpose script for dealing with nested directories and multiple
-# rar-files. Extracting, converting and cleaning up recursively.
 #
 # Author: Jørgen Abrahamsen <jabr@pludre.net>
 #
 
-
+from time import time
+import argparse
 import commands # UNIX only. Wrapper for os.popen(). Different signal handling than os.system()
-import getopt
 import os # Both UNIX and Windows platform
 import re
-import signal
 import sys
-from time import time
+import traceback
 
 
-def main(argv):
-    try:
-        opts, args = getopt.getopt(argv, 'xcods')
-    except getopt.GetoptError, err:
-        print str(err)
-        usage()
-        sys.exit(2)
+def main():
 
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Check path
-    if not args:
-        print "Path not supplied."
-        usage()
-        sys.exit(1)
-
-    stack = []
-
-    for opt, arg in opts:
-        if opt == '-d':
-            env['debug'] = True
-        elif opt == '-c':
-            stack.append('3_clean')
-        elif opt == '-o':
-            stack.append('4_convert')
-        elif opt == '-x':
-            stack.append('2_extract')
-        elif opt == '-s':
-            stack.append('1_verify')
-
-    # Sort the stack after priority
-    stack.sort()
-    stack.reverse()
-
-    dispatch_table = {
-        'verify': verify,
-        'extract': extract,
-        'clean': clean,
-    }
-
-    while stack:
-        dispatch_table[stack.pop()[2:]](args[0])
-    
-    sys.exit(0)
-
-
-def signal_handler(signal, frame):
-    os.abort()
-    print "\nExiting..."
-    sys.exit(0)
-
-
-# Only takes one single path, does NOT traverse.
-def verify(path):
-    verify_start_time = time()
-    count = 0
-
-    for (path, dirs, files) in os.walk(path):
-        print "=== VERIFYING: %s" % path
-        status, output = commands.getstatusoutput('cfv -p "%s"' % path)
-        # if no sfv do 'unrar t "%s"' % path
-        count += 1
-
-        # Post exec review
-        if status == 0:
-            print "... Verified: %s" % path
-            status = None
-        else:
-            print "!!! Verification failed: %s" % output
-            sys.exit(1)
-
-    if count > 1:
-        print "Verification completed in %s seconds\n" % round(time() - verify_start_time)
-
-
-def extract(path):
     extract_start_time = time()
     status = None
     output = None
     count = 0
     regex = "([\w,\.,\-]*\.rar)"
 
-    for (path, dirs, files) in os.walk(path):
+    for (path, dirs, files) in os.walk(args.path):
+        verified = False
         m = re.search(regex, str(os.listdir(path))) # string ok? Look at 'dirs' and 'files'
         if m:
-            count += 1
-            extract_start = time()
-            print "=== EXTRACTING: %s" % path
-            status, output = commands.getstatusoutput('unrar lb "%s"' % (os.path.join(path, m.group(0)))) 
-            if os.access(os.path.join(path, output), os.F_OK):
-                print "!!! File already exists: %s" % output 
-            else:
-                status, output = commands.getstatusoutput('unrar e -y "%s" "%s"' % (os.path.join(path, m.group(0)), path))
+            if args.verify:
+                verify_start_time = time()
+                count = 0
 
-            # Post exec review
-            if status == 0:
-                print "--- Done in %s seconds" % round(time() - extract_start, 2)
+                print "=== VERIFYING: %s" % path
+                status, output = commands.getstatusoutput('cfv -p "%s"' % path)
+                # if no sfv do 'unrar t "%s"' % path
+                count += 1
+
+                # Post exec review
+                if status == 0:
+                    print "... Verified: %s" % path
+                    status = None
+                    verified = True
+                else:
+                    print "!!! Verification failed: %s" % output
+                    continue # Jump no next path/archive
+
+                if count > 1:
+                    print "Verification completed in %s seconds\n" % round(time() - verify_start_time)
+
+            if args.extract:
+                count += 1
+                extract_start = time()
+                print "=== EXTRACTING: %s" % path
+                status, output = commands.getstatusoutput('unrar lb "%s"' % (os.path.join(path, m.group(0))))
+                if os.access(os.path.join(path, output), os.F_OK):
+                    print "!!! File already exists: %s" % output
+                else:
+                    status, output = commands.getstatusoutput('unrar e -y "%s" "%s"' % (os.path.join(path, m.group(0)), path))
+
+                # Post exec review
+                if status == 0:
+                    print "--- Done in %s seconds" % round(time() - extract_start, 2)
+                    status = None
+                else:
+                    print "!!! Extraction failed: %s" % output
+                    continue
+
+                if count > 1:
+                    print "--- Extraction completed in %s seconds\n" % round(time() - extract_start_time)
+
+            if args.clean:
+                clean_start_time = time()
                 status = None
-            else:
-                print "!!! Extraction failed: %s" % output
-                sys.exit(1)
+                output = None
+                file_regex = "[\w\.\-()]+\.(r(ar|\d{2})|sfv)"
+                dir_regex = "\w*(Sample|sample)"
+                rar_regex = "([\w,\.,\-]*\.rar)"
 
-    if count > 1:
-        print "--- Extraction completed in %s seconds\n" % round(time() - extract_start_time)
+                print "=== CLEANING UP"
 
+                for (path, dirs, files) in os.walk(path):
 
-def clean(path):
-    # TODO: try except
-    clean_start_time = time()
-    status = None
-    output = None
-    file_regex = "[\w\.\-()]+\.(r(ar|\d{2})|sfv)"
-    dir_regex = "\w*(Sample|sample)"
-    rar_regex = "([\w,\.,\-]*\.rar)"
+                    m = re.search(rar_regex, str(os.listdir(path)))
+                    if m:
+                        status, output = commands.getstatusoutput('unrar lb "%s"' % (os.path.join(path, m.group(0))))
+                        if not os.access(os.path.join(path, output), os.F_OK):
+                            print "!!! Archive is not extracted: %s" % output
+                            sys.exit(1)
 
-    print "=== CLEANING UP"
+                    # Delete single files
+                    print path
+                    for file in files: ## XXX: Should be able to regex out a list, and not just single values
+                        m = re.search(file_regex, file)
+                        if m:
+                            try:
+                                os.remove(os.path.join(path, m.group()))
+                                print "... %s" % m.group()
+                            except OSError, e:
+                                print "!!! Error: %s" % e
 
-    for (path, dirs, files) in os.walk(path):
+                    # Delete Sample directory
+                    m = re.search(dir_regex, path)
+                    if m:
+                        print path
+                        for file in files:
+                            os.remove(os.path.join(path, file))
+                            print "... %s" % file
 
-        m = re.search(rar_regex, str(os.listdir(path)))
-        if m:
-            status, output = commands.getstatusoutput('unrar lb "%s"' % (os.path.join(path, m.group(0)))) 
-            if not os.access(os.path.join(path, output), os.F_OK):
-                print "!!! Archive is not extracted: %s" % output 
-                sys.exit(1)
-
-        # Delete single files
-        print path
-        for file in files: ## XXX: Should be able to regex out a list, and not just single values
-            m = re.search(file_regex, file)
-            if m:
-                try:
-                    os.remove(os.path.join(path, m.group()))
-                    print "... %s" % m.group()
-                except OSError, e:
-                    print "!!! Error: %s" % e
-
-        # Delete Sample directory
-        m = re.search(dir_regex, path)
-        if m:
-            print path
-            for file in files:
-                os.remove(os.path.join(path, file))
-                print "... %s" % file
-
-            os.rmdir(path)
-            print "... %s" % m.group()
-
-                    
-    print "--- Cleaning completed in %s seconds\n" % round(time() - clean_start_time)
+                        os.rmdir(path)
+                        print "... %s" % m.group()
 
 
-#def ogm_to_mkv_convert(path):
-#    for (path, dirs, files) in os.walk(path):
-#
-#        for file in os.listdir(path):
-#            match = re.search('([\w,\.,\-]*)\.ogm', file)
-#
-#            if match:
-#                basename = match.group(1)
-#                #print basename
-#                os.system('mkvmerge -o "%s"/"%s".mkv "%s"/"%s".ogm --title %s' % (path, basename, path, basename, basename))
+                print "--- Cleaning completed in %s seconds\n" % round(time() - clean_start_time)
 
 
-def usage():
-    print >> sys.stderr, "\
-Usage: %s [OPTION]... DIRECTORY \n\
-\n\
-Report bugs to jabr@pludre.net" % sys.argv[0]
+if __name__ == '__main__':
+    try:
+        start_time = time()
 
+        parser = argparse.ArgumentParser(description='Torrent Tool is a tool \
+                    to easy verify, extract and clean RAR archives.',
+                    prog='torrent-tool')
 
-if __name__ == "__main__":
-    main(sys.argv[1:])
+        parser.add_argument('--debug', action='store_true')
+        parser.add_argument('--verify', action='store_true')
+        parser.add_argument('--extract', action='store_true')
+        parser.add_argument('--clean', action='store_true')
+        parser.add_argument('--path', metavar='path', type=str, default=os.getcwd(), nargs='?')
+
+        args = parser.parse_args()
+
+        main()
+
+        if args.debug:
+            print "Total time in minutes",
+            print (time() - start_time)
+
+        sys.exit(0)
+
+    except KeyboardInterrupt, e: # Ctrl-C
+        raise e
+    except SystemExit, e:        # sys.exit()
+        raise e
+    except Exception, e:
+        print "Error, unexpected exception"
+        print str(e)
+        traceback.print_exc()
+        sys.exit(1)
