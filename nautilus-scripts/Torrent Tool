@@ -1,16 +1,17 @@
 #!/bin/bash
 
-print () 
-{ 
-	echo -e "(1) Verify\n(2) Extract\n(3) Clean\n(4) Verify, extract and clean\n(x) Abort\nSelect action: "
+print ()
+{
+    echo -e "(1) Verify\n(2) Extract\n(3) Clean\n(4) Extract and clean\n(5) Verify, extract and clean\n(x) Abort\nSelect action: "
 	read response
-	[ "$response" = 1 ] && action="-s"
-	[ "$response" = 2 ] && action="-x"
-	[ "$response" = 3 ] && action="-c"
-	[ "$response" = 4 ] && action="-s -x -c"
+	[ "$response" = 1 ] && action="--verify"
+	[ "$response" = 2 ] && action="--extract"
+	[ "$response" = 3 ] && action="--clean"
+	[ "$response" = 4 ] && action="--extract --clean"
+	[ "$response" = 5 ] && action="--verify --extract --clean"
 	[ "$response" = x ] && exit 1
 
-	/usr/local/bin/torrent-tool $action ${1}
+	/usr/local/bin/torrent-tool $action --path ${1}
 }
 
 export -f print
